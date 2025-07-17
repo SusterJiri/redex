@@ -2,11 +2,16 @@ defmodule Server do
   @moduledoc """
   Your implementation of a Redis server
   """
-
   use Application
 
   def start(_type, _args) do
-    Supervisor.start_link([{Task, fn -> Server.listen() end}], strategy: :one_for_one)
+
+    children = [
+      {Task.Supervisor, name: Server.TaskSupervisor},
+      Supervisor.child_spec({Task, fn -> Server.listen() end}, restart: :permanent),
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_one)
   end
 
   @doc """
@@ -29,7 +34,10 @@ defmodule Server do
 
   defp loop_acceptor(socket) do
     {:ok, client} = :gen_tcp.accept(socket)
-    serve(client)
+    {:ok, pid} = Task.Supervisor.start_child(Server.TaskSupervisor, fn ->
+      serve(client)
+    end)
+    :ok = :gen_tcp.controlling_process(client, pid)
     loop_acceptor(socket)
   end
 
