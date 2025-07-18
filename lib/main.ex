@@ -7,7 +7,7 @@ defmodule Server do
   def start(_type, _args) do
     # Check if we should start the server (disabled in tests)
     start_server = Application.get_env(:codecrafters_redis, :start_server, true)
-    
+
     if start_server do
       children = [
         {Task.Supervisor, name: Server.TaskSupervisor},
@@ -95,10 +95,11 @@ defmodule Server do
     command = String.upcase(command)
     IO.puts("Executing command: #{command} with args: #{inspect(args)}")
     case command do
-      "ECHO" -> Commands.Echo.execute(args)
-      "PING" -> Commands.Ping.execute([])
-      "SET" -> Commands.Set.execute(args)
-      "GET" -> Commands.Get.execute(args)
+      "ECHO" -> RedisCommand.echo_command(args)
+      "PING" -> RedisCommand.ping_command()
+      "SET" -> RedisCommand.set_command(args)
+      "GET" -> RedisCommand.get_command(args)
+      "RPUSH" -> RedisCommand.rpush_command(args)
       _ ->
         {:error, "Unknown command: #{command}"}
     end

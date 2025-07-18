@@ -1,5 +1,5 @@
 defmodule RedisCommand do
-  alias Commands.{Set, Ping, Echo, Get}
+  alias Commands.{Set, Ping, Echo, Get, Rpush}
   @moduledoc """
   Behaviour for Redis command implementations.
   All command functions must return {:ok, response} or {:error, reason}.
@@ -17,4 +17,5 @@ defmodule RedisCommand do
   def set_command(args), do: Set.execute(args)
   def ping_command(), do: Ping.execute([])
   def echo_command(args), do: Echo.execute(args)
+  def rpush_command(args), do: Rpush.execute(args)
 end

@@ -34,4 +34,13 @@ defmodule Store do
     {:ok, value}
   end
 
+  def rpush(key, value) do
+    case :ets.lookup(:redis_store, key) do
+      [] ->
+        :ets.insert(:redis_store, {key, [value]})
+        {:ok, 1}
+
+    end
+  end
+
 end

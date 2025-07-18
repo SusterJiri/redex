@@ -1,6 +1,5 @@
 ExUnit.start()
 
-# Don't start the full application in tests - we'll manually start what we need
 Application.put_env(:codecrafters_redis, :start_server, false)
 
 # Configure ExUnit
