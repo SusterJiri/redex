@@ -7,15 +7,12 @@ defmodule Parser do
     case String.slice(array_header, 0, 1) do
       "*" ->
         arg_count = array_header |> String.slice(1..-1//1) |> String.to_integer()
-        IO.puts("Expecting #{arg_count} arguments")
 
         # Parse the arguments with validation
         case parse_arguments(rest, arg_count, []) do
           {:ok, args} ->
-            IO.puts("Parsed command: #{inspect(args)}")
             {:ok, args}
           {:error, reason} ->
-            IO.puts("Parse error: #{reason}")
             {:error, reason}
         end
       _ ->

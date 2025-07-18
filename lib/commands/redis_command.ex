@@ -1,4 +1,5 @@
 defmodule RedisCommand do
+  alias Commands.Lrange
   alias Commands.{Set, Ping, Echo, Get, Rpush}
   @moduledoc """
   Behaviour for Redis command implementations.
@@ -18,4 +19,5 @@ defmodule RedisCommand do
   def ping_command(), do: Ping.execute([])
   def echo_command(args), do: Echo.execute(args)
   def rpush_command(args), do: Rpush.execute(args)
+  def lrange_command(args), do: Lrange.execute(args)
 end

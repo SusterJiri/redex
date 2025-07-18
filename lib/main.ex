@@ -30,25 +30,38 @@ defmodule Server do
     # You can use print statements as follows for debugging, they'll be visible when running tests.
     IO.puts("Logs from your program will appear here!")
 
-    # Uncomment this block to pass the first stage
-    #
-    # # Since the tester restarts your program quite often, setting SO_REUSEADDR
-    # # ensures that we don't run into 'Address already in use' errors
+    # Use active mode for truly async connection handling
     {:ok, socket} = :gen_tcp.listen(6379, [:binary, active: false, reuseaddr: true])
     _ = Store.setup_store()
 
-    loop_acceptor(socket)
+    # Start multiple acceptor processes for parallel connection acceptance
+    acceptor_count = System.schedulers_online()
+    IO.puts("Starting #{acceptor_count} acceptor processes")
 
+    Enum.each(1..acceptor_count, fn i ->
+      spawn_link(fn -> loop_acceptor(socket, i) end)
+    end)
+
+    # Keep the main process alive
+    Process.sleep(:infinity)
   end
 
 
-  defp loop_acceptor(socket) do
-    {:ok, client} = :gen_tcp.accept(socket)
-    {:ok, pid} = Task.Supervisor.start_child(Server.TaskSupervisor, fn ->
-      serve(client)
-    end)
-    :ok = :gen_tcp.controlling_process(client, pid)
-    loop_acceptor(socket)
+  defp loop_acceptor(socket, acceptor_id) do
+    case :gen_tcp.accept(socket) do
+      {:ok, client} ->
+        IO.puts("Acceptor #{acceptor_id} accepted connection")
+        {:ok, pid} = Task.Supervisor.start_child(Server.TaskSupervisor, fn ->
+          serve(client)
+        end)
+        :ok = :gen_tcp.controlling_process(client, pid)
+        loop_acceptor(socket, acceptor_id)
+      {:error, reason} ->
+        IO.puts("Acceptor #{acceptor_id} error: #{reason}")
+        # Wait a bit before retrying to avoid busy loop
+        Process.sleep(100)
+        loop_acceptor(socket, acceptor_id)
+    end
   end
 
   defp serve(socket) do
@@ -69,9 +82,8 @@ defmodule Server do
             write_line(error_response, socket)
         end
         serve(socket)
-      {:error, data} ->
+      {:error, _data} ->
         :gen_tcp.close(socket)
-        IO.puts("Connection closed due to #{inspect(data)}")
     end
   end
 
@@ -100,6 +112,7 @@ defmodule Server do
       "SET" -> RedisCommand.set_command(args)
       "GET" -> RedisCommand.get_command(args)
       "RPUSH" -> RedisCommand.rpush_command(args)
+      "LRANGE" -> RedisCommand.lrange_command(args)
       _ ->
         {:error, "Unknown command: #{command}"}
     end

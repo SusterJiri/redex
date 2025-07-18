@@ -48,4 +48,21 @@ defmodule Store do
     end
   end
 
+  def lrange(key, start, stop) do
+    case :ets.lookup(:redis_store, key) do
+      [{^key, list}] when is_list(list) ->
+        length = length(list)
+        start = max(0, start)
+        stop = min(length - 1, stop)
+        if start > stop or start >= length do
+          {:ok, []}
+        else
+          result = Enum.slice(list, start, stop - start + 1)
+          {:ok, result}
+        end
+      _ ->
+        {:error, "Key #{key} does not exist or is not a list"}
+    end
+  end
+
 end
