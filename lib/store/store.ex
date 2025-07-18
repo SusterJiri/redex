@@ -39,7 +39,12 @@ defmodule Store do
       [] ->
         :ets.insert(:redis_store, {key, [value]})
         {:ok, 1}
-
+      [{^key, list}] when is_list(list) ->
+        new_list = list ++ [value]
+        :ets.insert(:redis_store, {key, new_list})
+        {:ok, length(new_list)}
+      _ ->
+        {:error, "Invalid data type for key #{key}"}
     end
   end
 
