@@ -5,13 +5,22 @@ defmodule Server do
   use Application
 
   def start(_type, _args) do
+    # Check if we should start the server (disabled in tests)
+    start_server = Application.get_env(:codecrafters_redis, :start_server, true)
+    
+    if start_server do
+      children = [
+        {Task.Supervisor, name: Server.TaskSupervisor},
+        Store.Cleaner,
+        Supervisor.child_spec({Task, fn -> Server.listen() end}, restart: :permanent),
+      ]
 
-    children = [
-      {Task.Supervisor, name: Server.TaskSupervisor},
-      Supervisor.child_spec({Task, fn -> Server.listen() end}, restart: :permanent),
-    ]
-
-    Supervisor.start_link(children, strategy: :one_for_one)
+      Supervisor.start_link(children, strategy: :one_for_one)
+    else
+      # In test mode, just start the store setup without the server
+      Store.setup_store()
+      {:ok, self()}
+    end
   end
 
   @doc """
@@ -86,10 +95,10 @@ defmodule Server do
     command = String.upcase(command)
     IO.puts("Executing command: #{command} with args: #{inspect(args)}")
     case command do
-      "ECHO" -> Commands.echo_command(args)
-      "PING" -> Commands.ping_command()
-      "SET" -> Commands.set_command(args)
-      "GET" -> Commands.get_command(args)
+      "ECHO" -> Commands.Echo.execute(args)
+      "PING" -> Commands.Ping.execute([])
+      "SET" -> Commands.Set.execute(args)
+      "GET" -> Commands.Get.execute(args)
       _ ->
         {:error, "Unknown command: #{command}"}
     end

@@ -1,5 +1,7 @@
 defmodule Parser do
 
+  def parse_command([]), do: {:error, "Empty input"}
+
   def parse_command([array_header | rest]) do
     # Extract number of arguments from "*2" -> 2
     case String.slice(array_header, 0, 1) do
