@@ -26,6 +26,7 @@ defmodule Server do
     # # Since the tester restarts your program quite often, setting SO_REUSEADDR
     # # ensures that we don't run into 'Address already in use' errors
     {:ok, socket} = :gen_tcp.listen(6379, [:binary, active: false, reuseaddr: true])
+    _ = Store.setup_store()
 
     loop_acceptor(socket)
 
@@ -135,6 +136,28 @@ defmodule Server do
         end
       "PING" ->
         {:ok, "+PONG\r\n"}
+      "SET" ->
+        if length(args) == 2 do
+          case Store.set(hd(args), Enum.at(args, 1)) do
+            {:ok, _value} ->
+              response = "+OK\r\n"
+              {:ok, response}
+            {:error, :insert_failed} ->
+              {:error, "Failed to set value: #{hd(args)}"}
+          end
+        end
+      "GET" ->
+        if length(args) == 1 do
+          case Store.get(hd(args)) do
+            {:ok, value} ->
+              response = "$#{byte_size(value)}\r\n#{value}\r\n"
+              {:ok, response}
+            {:error, :not_found} ->
+              {:ok, "$-1\r\n"}
+          end
+        else
+          {:error, "GET command expects exactly one argument"}
+        end
       _ ->
         {:error, "Unknown command: #{command}"}
     end
