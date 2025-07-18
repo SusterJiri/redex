@@ -37,10 +37,10 @@ defmodule Store do
   def rpush(key, value) do
     case :ets.lookup(:redis_store, key) do
       [] ->
-        :ets.insert(:redis_store, {key, [value]})
-        {:ok, 1}
+        :ets.insert(:redis_store, {key, value})
+        {:ok, "#{length(value)}"}
       [{^key, list}] when is_list(list) ->
-        new_list = list ++ [value]
+        new_list = list ++ value
         :ets.insert(:redis_store, {key, new_list})
         {:ok, length(new_list)}
       _ ->

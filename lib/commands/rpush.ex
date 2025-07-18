@@ -4,8 +4,11 @@ defmodule Commands.Rpush do
   @impl RedisCommand
   def execute(args) do
     case args do
-      [key, value] ->
-        case Store.rpush(key, value) do
+      [_key | []] ->
+        {:error, "RPUSH command expects at least one value"}
+
+      [key | values] when is_list(values) and length(values) > 0 ->
+        case Store.rpush(key, values) do
           {:ok, count} ->
             {:ok, ":#{count}\r\n"}
           {:error, reason} ->
@@ -13,7 +16,7 @@ defmodule Commands.Rpush do
         end
 
       _ ->
-        {:error, "RPUSH command expects exactly two arguments"}
+        {:error, "RPUSH command expects a key and at least one value"}
     end
   end
 
