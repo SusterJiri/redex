@@ -46,7 +46,7 @@ defmodule Server do
     case read_line(socket) do
       {:ok, data} ->
         split_data = data |> String.split("\r\n") |> Enum.filter(&(&1 != ""))
-        case parse_command(split_data) do
+        case Parser.parse_command(split_data) do
           {:ok, [command | args]} ->
             case execute_command(command, args) do
               {:ok, response} ->
@@ -82,82 +82,14 @@ defmodule Server do
     :gen_tcp.send(socket, line)
   end
 
-  defp parse_command([array_header | rest]) do
-    # Extract number of arguments from "*2" -> 2
-    case String.slice(array_header, 0, 1) do
-      "*" ->
-        arg_count = array_header |> String.slice(1..-1//1) |> String.to_integer()
-        IO.puts("Expecting #{arg_count} arguments")
-
-        # Parse the arguments with validation
-        case parse_arguments(rest, arg_count, []) do
-          {:ok, args} ->
-            IO.puts("Parsed command: #{inspect(args)}")
-            {:ok, args}
-          {:error, reason} ->
-            IO.puts("Parse error: #{reason}")
-            {:error, reason}
-        end
-      _ ->
-        {:error, "Invalid RESP format: expected array"}
-    end
-  end
-
-  defp parse_arguments([], 0, acc), do: {:ok, Enum.reverse(acc)}
-  defp parse_arguments([], _remaining, _acc), do: {:error, "Not enough arguments"}
-  defp parse_arguments([size_header, value | rest], remaining, acc) when remaining > 0 do
-    case String.slice(size_header, 0, 1) do
-      "$" ->
-        expected_size = size_header |> String.slice(1..-1//1) |> String.to_integer()
-        actual_size = byte_size(value)
-
-        if actual_size == expected_size do
-          IO.puts("Validated argument: '#{value}' (#{actual_size} bytes)")
-          parse_arguments(rest, remaining - 1, [value | acc])
-        else
-          {:error, "Size mismatch: expected #{expected_size}, got #{actual_size} bytes"}
-        end
-      _ ->
-        {:error, "Invalid RESP format: expected bulk string"}
-    end
-  end
-  defp parse_arguments(_, _, _), do: {:error, "Invalid argument format"}
-
   defp execute_command(command, args) do
     command = String.upcase(command)
     IO.puts("Executing command: #{command} with args: #{inspect(args)}")
     case command do
-      "ECHO" ->
-        if length(args) == 1 do
-          response = "$#{byte_size(hd(args))}\r\n#{hd(args)}\r\n"
-          {:ok, response}
-        else
-          {:error, "ECHO command expects exactly one argument"}
-        end
-      "PING" ->
-        {:ok, "+PONG\r\n"}
-      "SET" ->
-        if length(args) == 2 do
-          case Store.set(hd(args), Enum.at(args, 1)) do
-            {:ok, _value} ->
-              response = "+OK\r\n"
-              {:ok, response}
-            {:error, :insert_failed} ->
-              {:error, "Failed to set value: #{hd(args)}"}
-          end
-        end
-      "GET" ->
-        if length(args) == 1 do
-          case Store.get(hd(args)) do
-            {:ok, value} ->
-              response = "$#{byte_size(value)}\r\n#{value}\r\n"
-              {:ok, response}
-            {:error, :not_found} ->
-              {:ok, "$-1\r\n"}
-          end
-        else
-          {:error, "GET command expects exactly one argument"}
-        end
+      "ECHO" -> Commands.echo_command(args)
+      "PING" -> Commands.ping_command()
+      "SET" -> Commands.set_command(args)
+      "GET" -> Commands.get_command(args)
       _ ->
         {:error, "Unknown command: #{command}"}
     end
