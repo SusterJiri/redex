@@ -18,4 +18,6 @@ defmodule Commands.Lrange do
         {:ok, "*0\r\n"}
     end
   end
+
+  def execute(_), do: {:error, "LRANGE command expects exactly three arguments: key, start, stop"}
 end

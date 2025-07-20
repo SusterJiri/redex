@@ -119,4 +119,18 @@ defmodule Store do
     end
   end
 
+  def lpop(key) do
+    case :ets.lookup(:redis_store, key) do
+       [{^key, list}] when is_list(list) ->
+        case list do
+          [] -> {:ok, :not_found}
+          [head | tail] ->
+            :ets.insert(:redis_store, {key, tail})
+            {:ok, head}
+        end
+      [{^key, _}] ->
+        {:error, "WRONGTYPE Operation against a key holding the wrong kind of value"}
+    end
+  end
+
 end
