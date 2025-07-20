@@ -61,7 +61,6 @@ defmodule Store do
       [{^key, list}] when is_list(list) ->
 
         new_list = Enum.reduce(value, list, fn x, acc -> [x | acc] end)
-        IO.puts("New list: #{inspect(new_list)}")
         :ets.insert(:redis_store, {key, new_list})
         {:ok, "#{length(new_list)}"}
       _ ->
@@ -104,6 +103,19 @@ defmodule Store do
       [] ->
         # Key doesn't exist - return empty list
         {:ok, []}
+    end
+  end
+
+  def llen(key) do
+    case :ets.lookup(:redis_store, key) do
+      [{^key, list}] when is_list(list) ->
+        {:ok, length(list)}
+
+      [{^key, _}] ->
+        {:error, "WRONGTYPE Operation against a key holding the wrong kind of value"}
+
+      [] ->
+        {:ok, 0}
     end
   end
 

@@ -114,6 +114,7 @@ defmodule Server do
       "RPUSH" -> RedisCommand.rpush_command(args)
       "LPUSH" -> RedisCommand.lpush_command(args)
       "LRANGE" -> RedisCommand.lrange_command(args)
+      "LLEN" -> RedisCommand.llen_command(args)
       _ ->
         {:error, "Unknown command: #{command}"}
     end
