@@ -59,10 +59,10 @@ defmodule Store do
         {:ok, "#{length(value)}"}
 
       [{^key, list}] when is_list(list) ->
-
         new_list = Enum.reduce(value, list, fn x, acc -> [x | acc] end)
         :ets.insert(:redis_store, {key, new_list})
         {:ok, "#{length(new_list)}"}
+
       _ ->
         {:error, "Invalid data type for key #{key}"}
     end
@@ -82,8 +82,12 @@ defmodule Store do
         # - If start >= list_length, return empty list
         # - If stop >= list_length, use list_length - 1
         cond do
-          actual_start > actual_stop -> {:ok, []}
-          actual_start >= list_length -> {:ok, []}
+          actual_start > actual_stop ->
+            {:ok, []}
+
+          actual_start >= list_length ->
+            {:ok, []}
+
           true ->
             # Clamp stop to valid range
             clamped_stop = min(actual_stop, list_length - 1)
@@ -121,16 +125,45 @@ defmodule Store do
 
   def lpop(key) do
     case :ets.lookup(:redis_store, key) do
-       [{^key, list}] when is_list(list) ->
+      [{^key, list}] when is_list(list) ->
         case list do
-          [] -> {:ok, :not_found}
+          [] ->
+            {:ok, :not_found}
+
           [head | tail] ->
             :ets.insert(:redis_store, {key, tail})
             {:ok, head}
         end
+
       [{^key, _}] ->
         {:error, "WRONGTYPE Operation against a key holding the wrong kind of value"}
     end
   end
 
+  def lpop(key, number_of_elements_to_pop) do
+    # Convert string to integer if needed
+    count = case number_of_elements_to_pop do
+      count when is_integer(count) -> count
+      count when is_binary(count) -> String.to_integer(count)
+      [count_str] when is_binary(count_str) -> String.to_integer(count_str)
+      _ -> 0
+    end
+
+    if count <= 0 do
+      {:error, "Invalid number of elements to pop"}
+    else
+      case :ets.lookup(:redis_store, key) do
+        [{^key, list}] when is_list(list) ->
+          {popped_elements, remaining_list} = Enum.split(list, count)
+          :ets.insert(:redis_store, {key, remaining_list})
+          {:ok, popped_elements}
+
+        [{^key, _}] ->
+          {:error, "WRONGTYPE Operation against a key holding the wrong kind of value"}
+
+        [] ->
+          {:ok, :not_found}
+      end
+    end
+  end
 end
