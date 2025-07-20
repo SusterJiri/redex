@@ -112,6 +112,7 @@ defmodule Server do
       "SET" -> RedisCommand.set_command(args)
       "GET" -> RedisCommand.get_command(args)
       "RPUSH" -> RedisCommand.rpush_command(args)
+      "LPUSH" -> RedisCommand.lpush_command(args)
       "LRANGE" -> RedisCommand.lrange_command(args)
       _ ->
         {:error, "Unknown command: #{command}"}

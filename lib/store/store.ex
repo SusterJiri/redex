@@ -52,6 +52,23 @@ defmodule Store do
     end
   end
 
+  def lpush(key, value) do
+    case :ets.lookup(:redis_store, key) do
+      [] ->
+        :ets.insert(:redis_store, {key, Enum.reverse(value)})
+        {:ok, "#{length(value)}"}
+
+      [{^key, list}] when is_list(list) ->
+
+        new_list = Enum.reduce(value, list, fn x, acc -> [x | acc] end)
+        IO.puts("New list: #{inspect(new_list)}")
+        :ets.insert(:redis_store, {key, new_list})
+        {:ok, "#{length(new_list)}"}
+      _ ->
+        {:error, "Invalid data type for key #{key}"}
+    end
+  end
+
   def lrange(key, start, stop) do
     case :ets.lookup(:redis_store, key) do
       [{^key, list}] when is_list(list) ->
@@ -89,4 +106,5 @@ defmodule Store do
         {:ok, []}
     end
   end
+
 end
