@@ -3,8 +3,16 @@ defmodule Commands.Blpop do
 
   @impl RedisCommand
   def execute([key, timeout_str]) do
-    timeout = String.to_integer(timeout_str)
-    IO.puts("BLPOP: Trying to pop from key '#{key}'")
+    # Parse timeout - Redis accepts both integers and floats
+    timeout = try do
+      String.to_float(timeout_str)
+    rescue
+      ArgumentError ->
+        # If it's not a valid float, try integer and convert to float
+        String.to_integer(timeout_str) * 1.0
+    end
+
+    IO.puts("BLPOP: Trying to pop from key '#{key}' with timeout #{timeout}")
 
     case Store.lpop(key) do
       {:ok, :not_found} ->
