@@ -15,7 +15,6 @@ defmodule Commands.Lpop do
   end
 
   def execute([key | num_of_el]) do
-    IO.puts("LPOP command with key: #{key} and num_of_el: #{inspect(num_of_el)}")
     case Store.lpop(key, num_of_el) do
       {:ok, :not_found} ->
         {:ok, "$-1\r\n"}

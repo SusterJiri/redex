@@ -75,7 +75,7 @@ defmodule Server do
               {:ok, response} ->
                 write_line(response, socket)
                 serve(socket)
-              {:block, key} ->
+              {:block, {key, _timeout}} ->
                 # Handle blocking command (BLPOP)
                 BlockingQueue.add_blocked_client(key, self(), socket)
                 # Don't call serve(socket) again - we're blocked!
