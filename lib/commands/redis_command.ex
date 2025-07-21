@@ -13,7 +13,6 @@ defmodule RedisCommand do
 
   # Convenience functions for backward compatibility
   def get_command(args), do: Get.execute(args)
-  @spec set_command(any()) :: {:error, <<_::64, _::_*8>>} | {:ok, <<_::40>>}
   def set_command(args), do: Set.execute(args)
   def ping_command(), do: Ping.execute([])
   def echo_command(args), do: Echo.execute(args)
