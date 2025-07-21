@@ -12,21 +12,26 @@ defmodule BlockingQueue do
   def handle_cast({:add_blocked_client, key, client_pid, socket}, state) do
     timestamp = :os.system_time(:millisecond)
     client_info = {client_pid, socket, timestamp}
+    IO.puts("BlockingQueue: Adding blocked client #{inspect(client_pid)} for key '#{key}'")
 
     new_state =
       Map.update(state, key, [client_info], fn clients ->
         clients ++ [client_info]
       end)
 
+    IO.puts("BlockingQueue: State now has #{map_size(new_state)} keys, key '#{key}' has #{length(Map.get(new_state, key, []))} clients")
     {:noreply, new_state}
   end
 
   def handle_cast({:notify_client, key}, state) do
+    IO.puts("BlockingQueue: notify_client called for key '#{key}'")
     case Map.get(state, key) do
       nil ->
+        IO.puts("BlockingQueue: No clients waiting for key '#{key}'")
         {:noreply, state}
 
       [] ->
+        IO.puts("BlockingQueue: Empty client list for key '#{key}'")
         {:noreply, state}
 
       [first_client | remaining_clients] ->

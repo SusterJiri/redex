@@ -77,6 +77,7 @@ defmodule Server do
                 serve(socket)
               {:block, {key, _timeout}} ->
                 # Handle blocking command (BLPOP)
+                IO.puts("Main: Blocking client for key '#{key}', pid: #{inspect(self())}")
                 BlockingQueue.add_blocked_client(key, self(), socket)
                 # Don't call serve(socket) again - we're blocked!
                 # The client will be notified by BlockingQueue when data is available
