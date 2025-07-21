@@ -9,6 +9,7 @@ defmodule Commands.Rpush do
   def execute([key | values]) when length(values) > 0 do
     case Store.rpush(key, values) do
       {:ok, count} ->
+        BlockingQueue.notify_client(key)
         {:ok, ":#{count}\r\n"}
       {:error, reason} ->
         {:error, reason}

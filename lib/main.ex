@@ -12,6 +12,7 @@ defmodule Server do
       children = [
         {Task.Supervisor, name: Server.TaskSupervisor},
         Store.Cleaner,
+        BlockingQueue,
         Supervisor.child_spec({Task, fn -> Server.listen() end}, restart: :permanent),
       ]
 
@@ -73,17 +74,35 @@ defmodule Server do
             case execute_command(command, args) do
               {:ok, response} ->
                 write_line(response, socket)
+                serve(socket)
+              {:block, key} ->
+                # Handle blocking command (BLPOP)
+                BlockingQueue.add_blocked_client(key, self(), socket)
+                # Don't call serve(socket) again - we're blocked!
+                # The client will be notified by BlockingQueue when data is available
+                wait_for_unblock()
               {:error, reason} ->
                 error_response = "-ERR #{reason}\r\n"
                 write_line(error_response, socket)
+                serve(socket)
             end
           {:error, reason} ->
             error_response = "-ERR #{reason}\r\n"
             write_line(error_response, socket)
+            serve(socket)
         end
-        serve(socket)
       {:error, _data} ->
+        # Client disconnected, remove from blocking queues
+        BlockingQueue.remove_client(self())
         :gen_tcp.close(socket)
+    end
+  end
+
+  defp wait_for_unblock() do
+    # This process is now blocked, waiting for BlockingQueue to send response
+    # The process will just wait here until the connection is closed
+    receive do
+      _ -> :ok
     end
   end
 
@@ -116,6 +135,7 @@ defmodule Server do
       "LRANGE" -> RedisCommand.lrange_command(args)
       "LLEN" -> RedisCommand.llen_command(args)
       "LPOP" -> RedisCommand.lpop_command(args)
+      "BLPOP" -> RedisCommand.blpop_command(args)
       _ ->
         {:error, "Unknown command: #{command}"}
     end
