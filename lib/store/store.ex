@@ -137,6 +137,9 @@ defmodule Store do
 
       [{^key, _}] ->
         {:error, "WRONGTYPE Operation against a key holding the wrong kind of value"}
+
+      [] ->
+        {:ok, :not_found}
     end
   end
 

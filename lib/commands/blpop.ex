@@ -5,7 +5,7 @@ defmodule Commands.Blpop do
   def execute([key, timeout_str]) do
     timeout = String.to_integer(timeout_str)
 
-    case Store.lpop(key, 1) do
+    case Store.lpop(key) do
       {:ok, :not_found} ->
         # List is empty - signal the main server to block this client
         {:block, {key, timeout}}
