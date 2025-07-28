@@ -169,4 +169,17 @@ defmodule Store do
       end
     end
   end
+
+  def type(key) do
+    case :ets.lookup(:redis_store, key) do
+      [] ->
+        {:not_found, "none"}
+
+      [{^key, value}] when is_binary(value) ->
+        {:ok, :string}
+
+      [{^key, list}] when is_list(list) ->
+        {:ok, :list}
+      end
+  end
 end

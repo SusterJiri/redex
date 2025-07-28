@@ -133,6 +133,7 @@ defmodule Server do
       "LLEN" -> RedisCommand.llen_command(args)
       "LPOP" -> RedisCommand.lpop_command(args)
       "BLPOP" -> RedisCommand.blpop_command(args)
+      "TYPE" -> RedisCommand.type_command(args)
       _ ->
         {:error, "Unknown command: #{command}"}
     end

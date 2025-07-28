@@ -5,6 +5,7 @@ defmodule BlockingQueue do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
+  @spec init(any()) :: {:ok, %{}}
   def init(_) do
     {:ok, %{}}
   end
@@ -22,14 +23,6 @@ defmodule BlockingQueue do
             {:noreply, state}
 
           {_pid, socket, _timestamp, _timer_ref} ->
-            # Get client info for debugging
-            client_info_str = case :inet.peername(socket) do
-              {:ok, {ip, port}} -> "#{:inet.ntoa(ip)}:#{port}"
-              _ -> "unknown"
-            end
-            
-            IO.puts("BlockingQueue: TIMEOUT for CLIENT #{client_info_str} (PID: #{inspect(client_pid)}) on key '#{key}'")
-            
             # Send timeout response and remove client
             :gen_tcp.send(socket, "$-1\r\n")
 
@@ -51,36 +44,20 @@ defmodule BlockingQueue do
 
   def handle_cast({:add_blocked_client, key, client_pid, socket, timeout}, state) do
     timestamp = :os.system_time(:millisecond)
-    
-    # Get client info for debugging
-    client_info_str = case :inet.peername(socket) do
-      {:ok, {ip, port}} -> "#{:inet.ntoa(ip)}:#{port}"
-      _ -> "unknown"
-    end
-    
-    IO.puts("BlockingQueue: Adding CLIENT #{client_info_str} (PID: #{inspect(client_pid)}) for key '#{key}' with timeout #{timeout}")
+    IO.puts("BlockingQueue: Adding client #{inspect(client_pid)} for key '#{key}' with timeout #{timeout}")
 
     if timeout == 0 || timeout == 0.0 do
       # No timeout - wait forever
-      IO.puts("BlockingQueue: CLIENT #{client_info_str} will wait forever (no timeout)")
+      IO.puts("BlockingQueue: Client will wait forever (no timeout)")
       client_info = {client_pid, socket, timestamp, nil}
 
       new_state =
-        Map.update(state, key, [client_info], fn clients ->
+        Map.update(state, key, [], fn clients ->
           # Add client and sort by timestamp to ensure FIFO order
           updated_clients = (clients ++ [client_info])
           |> Enum.sort_by(fn {_pid, _socket, timestamp, _timer_ref} -> timestamp end)
 
-          # Debug: show all clients with their info
-          client_debug_info = Enum.map(updated_clients, fn {pid, sock, ts, _} ->
-            sock_info = case :inet.peername(sock) do
-              {:ok, {ip, port}} -> "#{:inet.ntoa(ip)}:#{port}"
-              _ -> "unknown"
-            end
-            "#{sock_info}(#{inspect(pid)})@#{ts}"
-          end)
-          
-          IO.puts("BlockingQueue: Clients for '#{key}' now: #{inspect(client_debug_info)}")
+          IO.puts("BlockingQueue: Clients for '#{key}' now: #{inspect(Enum.map(updated_clients, fn {pid, _, ts, _} -> {pid, ts} end))}")
           updated_clients
         end)
 
@@ -91,25 +68,11 @@ defmodule BlockingQueue do
       timer_ref = Process.send_after(self(), {:timeout, key, client_pid}, timeout_ms)
       client_info = {client_pid, socket, timestamp, timer_ref}
 
-      IO.puts("BlockingQueue: CLIENT #{client_info_str} will timeout in #{timeout_ms}ms")
-
       new_state =
         Map.update(state, key, [client_info], fn clients ->
           # Add client and sort by timestamp to ensure FIFO order
-          updated_clients = (clients ++ [client_info])
+          (clients ++ [client_info])
           |> Enum.sort_by(fn {_pid, _socket, timestamp, _timer_ref} -> timestamp end)
-          
-          # Debug: show all clients with their info
-          client_debug_info = Enum.map(updated_clients, fn {pid, sock, ts, _} ->
-            sock_info = case :inet.peername(sock) do
-              {:ok, {ip, port}} -> "#{:inet.ntoa(ip)}:#{port}"
-              _ -> "unknown"
-            end
-            "#{sock_info}(#{inspect(pid)})@#{ts}"
-          end)
-          
-          IO.puts("BlockingQueue: Clients for '#{key}' now: #{inspect(client_debug_info)}")
-          updated_clients
         end)
 
       {:noreply, new_state}
@@ -117,35 +80,23 @@ defmodule BlockingQueue do
   end
 
   def handle_cast({:notify_client, key}, state) do
-    IO.puts("BlockingQueue: Got notify_client for key '#{key}'")
-    
     case Map.get(state, key) do
       nil ->
-        IO.puts("BlockingQueue: No clients waiting for key '#{key}'")
         {:noreply, state}
 
       [] ->
-        IO.puts("BlockingQueue: Empty client list for key '#{key}'")
         {:noreply, state}
 
       [first_client | remaining_clients] ->
         # Try to LPOP an element for the blocked client
         case Store.lpop(key) do
           {:ok, :not_found} ->
-            IO.puts("BlockingQueue: No elements available for key '#{key}', clients keep waiting")
+            # No elements available, keep waiting
             {:noreply, state}
 
           {:ok, element} ->
             # Got an element! Send it to the blocked client
-            {client_pid, socket, _timestamp, timer_ref} = first_client
-
-            # Get client info for debugging
-            client_info_str = case :inet.peername(socket) do
-              {:ok, {ip, port}} -> "#{:inet.ntoa(ip)}:#{port}"
-              _ -> "unknown"
-            end
-            
-            IO.puts("BlockingQueue: SERVING CLIENT #{client_info_str} (PID: #{inspect(client_pid)}) with element '#{element}' for key '#{key}'")
+            {_client_pid, socket, _timestamp, timer_ref} = first_client
 
             # Cancel the timeout timer if it exists
             if timer_ref, do: Process.cancel_timer(timer_ref)
