@@ -33,14 +33,21 @@ defmodule Store.Cleaner do
   defp clean_expired_keys() do
     now = :os.system_time(:millisecond)
 
-    expired_keys = :ets.select(:redis_store, [
-      {{:'$1', {:'$2', :'$3'}},
-       [{:andalso, {:is_integer, :'$3'}, {:<, :'$3', now}}],
-       [:'$1']}
-    ])
+    # Clean expired keys from ALL shards
+    total_cleaned = for shard_id <- 0..15 do
+      table = Store.shard_table_name(shard_id)
 
-    Enum.each(expired_keys, &:ets.delete(:redis_store, &1))
+      expired_keys = :ets.select(table, [
+        {{:'$1', {:'$2', :'$3'}},
+         [{:andalso, {:is_integer, :'$3'}, {:<, :'$3', now}}],
+         [:'$1']}
+      ])
 
-    length(expired_keys)
+      Enum.each(expired_keys, &:ets.delete(table, &1))
+      length(expired_keys)
+    end
+    |> Enum.sum()
+
+    total_cleaned
   end
 end

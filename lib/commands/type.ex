@@ -11,6 +11,9 @@ defmodule Commands.Type do
       {:ok, :list} ->
         {:ok, "+list\r\n"}
 
+      {:ok, :stream} ->
+        {:ok, "+stream\r\n"}
+
       {:not_found, _} ->
         {:ok, "+none\r\n"}
     end

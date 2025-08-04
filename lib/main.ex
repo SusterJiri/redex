@@ -134,6 +134,7 @@ defmodule Server do
       "LPOP" -> RedisCommand.lpop_command(args)
       "BLPOP" -> RedisCommand.blpop_command(args)
       "TYPE" -> RedisCommand.type_command(args)
+      "XADD" -> RedisCommand.xadd_command(args)
       _ ->
         {:error, "Unknown command: #{command}"}
     end
