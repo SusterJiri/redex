@@ -69,10 +69,13 @@ defmodule BlockingQueue do
       client_info = {client_pid, socket, timestamp, timer_ref}
 
       new_state =
-        Map.update(state, key, [client_info], fn clients ->
+        Map.update(state, key, [], fn clients ->
           # Add client and sort by timestamp to ensure FIFO order
-          (clients ++ [client_info])
+          updated_clients = (clients ++ [client_info])
           |> Enum.sort_by(fn {_pid, _socket, timestamp, _timer_ref} -> timestamp end)
+
+          IO.puts("BlockingQueue: Clients for '#{key}' now: #{inspect(Enum.map(updated_clients, fn {pid, _, ts, _} -> {pid, ts} end))}")
+          updated_clients
         end)
 
       {:noreply, new_state}
