@@ -180,6 +180,9 @@ defmodule Server do
       "XRANGE" ->
         RedisCommand.xrange_command(args)
 
+      "XREAD" ->
+        RedisCommand.xread_command(args)
+
       _ ->
         {:error, "Unknown command: #{command}"}
     end

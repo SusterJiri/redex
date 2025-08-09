@@ -252,7 +252,7 @@ defmodule Store do
         case validate_entry_id({timestamp, sequence}, []) do
           {:ok, new_timestamp, new_sequence} ->
             entry_id = "#{new_timestamp}-#{new_sequence}"
-            stream_entries = [{entry_id, {new_timestamp, new_sequence}, field_value_pairs}]
+            stream_entries = [{entry_id, field_value_pairs}]
             :ets.insert(table, {stream_key, {:stream, stream_entries}})
             {:ok, entry_id}
 
@@ -267,7 +267,7 @@ defmodule Store do
             entry_id = "#{new_timestamp}-#{new_sequence}"
 
             updated_entries = [
-              {entry_id, {new_timestamp, new_sequence}, field_value_pairs} | existing_entries
+              {entry_id, field_value_pairs} | existing_entries
             ]
 
             :ets.insert(table, {stream_key, {:stream, updated_entries}})
@@ -304,8 +304,12 @@ defmodule Store do
   end
 
   defp validate_entry_id({new_timestamp, new_sequence}, [
-         {_last_entry_id, {last_timestamp, last_sequence}, _} | _
+         {last_entry_id, _} | _
        ]) do
+    [last_timestamp, last_sequence] = String.split(last_entry_id, "-")
+    last_timestamp = String.to_integer(last_timestamp)
+    last_sequence = String.to_integer(last_sequence)
+
     cond do
       new_timestamp > last_timestamp and new_sequence == :generate ->
         {:ok, new_timestamp, 0}
@@ -345,15 +349,22 @@ defmodule Store do
         # Filter entries within the range
         filtered_entries =
           stream_entries
-          |> Enum.filter(fn {_entry_id, {timestamp, sequence}, _field_value_pairs} ->
-            in_range?({timestamp, sequence}, {start_ts, start_seq}, {end_ts, end_seq})
+          |> Enum.filter(fn {entry_id, _field_value_pairs} ->
+            [timestamp, sequence] = String.split(entry_id, "-")
+
+            in_range?(
+              {String.to_integer(timestamp), String.to_integer(sequence)},
+              {start_ts, start_seq},
+              {end_ts, end_seq}
+            )
           end)
           # Reverse to get chronological order (oldest first)
           |> Enum.reverse()
-          |> Enum.map(fn {entry_id, _parsed_id, field_value_pairs} ->
+          |> Enum.map(fn {entry_id, field_value_pairs} ->
             {entry_id, field_value_pairs}
           end)
-          IO.inspect(filtered_entries, label: "Filtered entries in xrange")
+
+        IO.inspect(filtered_entries, label: "Filtered entries in xrange")
 
         {:ok, filtered_entries}
 
@@ -404,5 +415,65 @@ defmodule Store do
       end
 
     start_ok and end_ok
+  end
+
+  def xread(stream_keys, ids) do
+    # Zip the two lists together so we can iterate over pairs
+    response =
+      Enum.zip(stream_keys, ids)
+      |> Enum.map(fn {stream_key, start_id} ->
+        table = get_table_for_key(stream_key)
+        IO.inspect({stream_key, start_id}, label: "Processing stream")
+
+        case :ets.lookup(table, stream_key) do
+          [{^stream_key, {:stream, entries}}] ->
+            IO.inspect(entries, label: "Entries in stream")
+
+            filtered_entries =
+              entries
+              |> Enum.filter(fn {entry_id, _field_value_pairs} ->
+                # Parse entry_id into timestamp and sequence
+                {entry_ts, entry_seq} = parse_entry_id(entry_id)
+
+                # Parse start_id into timestamp and sequence
+                {start_ts, start_seq} = parse_range_id(start_id, :start)
+
+                # Check if entry is greater than start (exclusive)
+                in_range?({entry_ts, entry_seq}, {start_ts, start_seq})
+              end)
+              # Reverse to get chronological order
+              |> Enum.reverse()
+
+            # Include stream key in result
+            {stream_key, filtered_entries}
+
+          _ ->
+            # Return empty list for non-existent streams
+            {stream_key, []}
+        end
+      end)
+      # Remove streams with no new entries
+      |> Enum.reject(fn {_stream_key, entries} -> entries == [] end)
+
+    {:ok, response}
+  end
+
+  # Helper function to parse entry ID string into {timestamp, sequence}
+  defp parse_entry_id(entry_id) do
+    [timestamp_str, sequence_str] = String.split(entry_id, "-")
+    {String.to_integer(timestamp_str), String.to_integer(sequence_str)}
+  end
+
+  defp in_range?({ts, seq}, {start_ts, start_seq}) do
+    # Check if entry timestamp/sequence is = start
+    start_ok =
+      cond do
+        start_ts == 0 and start_seq == 0 -> true
+        ts > start_ts -> true
+        ts == start_ts and seq > start_seq -> true
+        true -> false
+      end
+
+    start_ok
   end
 end

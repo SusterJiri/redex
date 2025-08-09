@@ -1,5 +1,5 @@
 defmodule RedisCommand do
-  alias Commands.{Set, Ping, Echo, Get, Rpush, Lpush, Lrange, Llen, Lpop, Blpop, Type, Xadd, Xrange}
+  alias Commands.{Set, Ping, Echo, Get, Rpush, Lpush, Lrange, Llen, Lpop, Blpop, Type, Xadd, Xrange, Xread}
   @moduledoc """
   Behaviour for Redis command implementations.
   All command functions must return {:ok, response} or {:error, reason}.
@@ -25,4 +25,6 @@ defmodule RedisCommand do
   def type_command(args), do: Type.execute(args)
   def xadd_command(args), do: Xadd.execute(args)
   def xrange_command(args), do: Xrange.execute(args)
+  def xread_command(args), do: Xread.execute(args)
+
 end
