@@ -22,9 +22,9 @@ defmodule BlockingQueue do
             # Client not found (maybe already served)
             {:noreply, state}
 
-          {_pid, socket, _timestamp, _timer_ref} ->
-            # Send timeout response and remove client
-            :gen_tcp.send(socket, "$-1\r\n")
+          {_pid, _socket, _timestamp, _timer_ref} ->
+            # Send timeout message to the client process
+            send(client_pid, {:timeout})
 
             remaining_clients =
               Enum.reject(clients, fn {pid, _socket, _timestamp, _timer_ref} ->
@@ -44,29 +44,39 @@ defmodule BlockingQueue do
 
   def handle_cast({:add_blocked_client, key, client_pid, socket, timeout}, state) do
     timestamp = :os.system_time(:microsecond)
-    IO.puts("BlockingQueue: Adding client #{inspect(client_pid)} for key '#{key}' with timeout #{timeout}")
+
+    IO.puts(
+      "BlockingQueue: Adding client #{inspect(client_pid)} for key '#{key}' with timeout #{timeout}"
+    )
+
     IO.puts("BlockingQueue: Timeout type: #{inspect(timeout)}")
     IO.puts("BlockingQueue: Timeout == 0? #{timeout == 0}")
     IO.puts("BlockingQueue: Timeout == 0.0? #{timeout == 0.0}")
 
-    client_info = if timeout == 0 || timeout == 0.0 do
-      # No timeout - wait forever
-      IO.puts("BlockingQueue: Client will wait forever (no timeout)")
-      {client_pid, socket, timestamp, nil}
-    else
-      # Set timeout timer
-      timeout_ms = round(timeout * 1000)
-      timer_ref = Process.send_after(self(), {:timeout, key, client_pid}, timeout_ms)
-      IO.puts("BlockingQueue: Client will timeout in #{timeout_ms}ms")
-      {client_pid, socket, timestamp, timer_ref}
-    end
+    client_info =
+      if timeout == 0 || timeout == 0.0 do
+        # No timeout - wait forever
+        IO.puts("BlockingQueue: Client will wait forever (no timeout)")
+        {client_pid, socket, timestamp, nil}
+      else
+        # Set timeout timer
+        timeout_ms = round(timeout * 1000)
+        timer_ref = Process.send_after(self(), {:timeout, key, client_pid}, timeout_ms)
+        IO.puts("BlockingQueue: Client will timeout in #{timeout_ms}ms")
+        {client_pid, socket, timestamp, timer_ref}
+      end
 
-    new_state = Map.update(state, key, [client_info], fn clients ->
-      # Simple append - FIFO order naturally maintained
-      updated_clients = clients ++ [client_info]
-      IO.puts("BlockingQueue: Clients for '#{key}' now: #{inspect(Enum.map(updated_clients, fn {pid, _, ts, _} -> {pid, ts} end))}")
-      updated_clients
-    end)
+    new_state =
+      Map.update(state, key, [client_info], fn clients ->
+        # Simple append - FIFO order naturally maintained
+        updated_clients = clients ++ [client_info]
+
+        IO.puts(
+          "BlockingQueue: Clients for '#{key}' now: #{inspect(Enum.map(updated_clients, fn {pid, _, ts, _} -> {pid, ts} end))}"
+        )
+
+        updated_clients
+      end)
 
     {:noreply, new_state}
   end
@@ -144,7 +154,10 @@ defmodule BlockingQueue do
   end
 
   def add_blocked_client(key, client_pid, socket, timeout \\ 0) do
-    IO.puts("BlockingQueue.add_blocked_client called with: key=#{key}, pid=#{inspect(client_pid)}, timeout=#{timeout}")
+    IO.puts(
+      "BlockingQueue.add_blocked_client called with: key=#{key}, pid=#{inspect(client_pid)}, timeout=#{timeout}"
+    )
+
     result = GenServer.cast(__MODULE__, {:add_blocked_client, key, client_pid, socket, timeout})
     IO.puts("GenServer.cast result: #{inspect(result)}")
     result
