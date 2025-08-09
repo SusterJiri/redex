@@ -2,25 +2,33 @@ defmodule Commands.Xread do
   @behaviour RedisCommand
 
   @impl RedisCommand
-  def execute([_blocking, timeout, streams_keyword | keys_ids]) do
-    case parse_streams([streams_keyword | keys_ids]) do
-      {:error, reason} ->
-        {:error, reason}
+  def execute([first_arg | rest] = args) do
+    case String.downcase(first_arg) do
+      "block" ->
+        case rest do
+          [timeout, streams_keyword | keys_ids] ->
+            case parse_streams([streams_keyword | keys_ids]) do
+              {:error, reason} ->
+                {:error, reason}
 
-      {stream_keys, ids} ->
-        {:block, {stream_keys, ids, timeout}}
-    end
-  end
+              {stream_keys, ids} ->
+                {:block, {stream_keys, ids, timeout}}
+            end
 
-  @impl RedisCommand
-  def execute([streams_keyword | keys_ids]) do
-    case parse_streams([streams_keyword | keys_ids]) do
-      {:error, reason} ->
-        {:error, reason}
+          _ ->
+            {:error, "Invalid XREAD BLOCK syntax"}
+        end
 
-      {stream_keys, ids} ->
-        case Store.xread(stream_keys, ids) do
-          {:ok, response} -> {:ok, encode_response(response)}
+      _other ->
+        # Non-blocking XREAD
+        case parse_streams(args) do
+          {:error, reason} ->
+            {:error, reason}
+
+          {stream_keys, ids} ->
+            case Store.xread(stream_keys, ids) do
+              {:ok, response} -> {:ok, encode_response(response)}
+            end
         end
     end
   end
