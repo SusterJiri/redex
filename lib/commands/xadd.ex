@@ -57,7 +57,12 @@ defmodule Commands.Xadd do
         {String.to_integer(timestamp), String.to_integer(sequence)}
 
       _ ->
-        {:error, "Invalid entry ID format"}
+        cond do
+          entry_id == "*" ->
+            {DateTime.utc_now() |> DateTime.to_unix(:millisecond), :generate}
+          true ->
+            {:error, "Invalid entry ID format"}
+        end
     end
   end
 end
