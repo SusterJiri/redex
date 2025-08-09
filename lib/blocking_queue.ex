@@ -163,6 +163,21 @@ defmodule BlockingQueue do
     result
   end
 
+  def handle_call({:has_blocked_clients, key}, _from, state) do
+    has_clients =
+      case Map.get(state, key) do
+        nil -> false
+        [] -> false
+        _clients -> true
+      end
+
+    {:reply, has_clients, state}
+  end
+
+  def has_blocked_clients?(key) do
+    GenServer.call(__MODULE__, {:has_blocked_clients, key})
+  end
+
   def notify_client(key) do
     GenServer.cast(__MODULE__, {:notify_client, key})
   end
