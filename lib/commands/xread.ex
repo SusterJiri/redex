@@ -1,3 +1,5 @@
+# Updated Commands.Xread module to handle $ properly
+
 defmodule Commands.Xread do
   @behaviour RedisCommand
 
@@ -12,7 +14,9 @@ defmodule Commands.Xread do
                 {:error, reason}
 
               {stream_keys, ids} ->
-                {:block, {stream_keys, ids, timeout}}
+                # Resolve $ to actual IDs at command time
+                resolved_ids = resolve_dollar_ids(stream_keys, ids)
+                {:block, {stream_keys, resolved_ids, timeout}}
             end
 
           _ ->
@@ -26,7 +30,10 @@ defmodule Commands.Xread do
             {:error, reason}
 
           {stream_keys, ids} ->
-            case Store.xread(stream_keys, ids) do
+            # Resolve $ to actual IDs for non-blocking too
+            resolved_ids = resolve_dollar_ids(stream_keys, ids)
+
+            case Store.xread(stream_keys, resolved_ids) do
               {:ok, response} -> {:ok, encode_response(response)}
             end
         end
@@ -37,11 +44,27 @@ defmodule Commands.Xread do
     {:error, "XREAD command expects at least stream, start, and end arguments"}
   end
 
+  # Resolve $ IDs to actual maximum IDs at command execution time
+  defp resolve_dollar_ids(stream_keys, ids) do
+    Enum.zip(stream_keys, ids)
+    |> Enum.map(fn {stream_key, id} ->
+      if id == "$" do
+        # Get current max ID for this stream
+        case Store.get_max_id_from_stream(stream_key) do
+          # Stream is empty, use 0-0
+          {0, 0} -> "0-0"
+          {ts, seq} -> "#{ts}-#{seq}"
+        end
+      else
+        id
+      end
+    end)
+  end
+
   defp parse_streams([streams_keyword | keys_ids]) do
     # Validate and parse the streams
     if String.downcase(streams_keyword) == "streams" do
       keys_ids_len = length(keys_ids)
-
       {keys, ids} = Enum.split(keys_ids, div(keys_ids_len, 2))
       {keys, ids}
     else

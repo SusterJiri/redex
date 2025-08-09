@@ -374,9 +374,41 @@ defmodule Store do
     end
   end
 
+  # Add this function to your Store module
+
+  def get_max_id_from_stream(stream_key) do
+    table = get_table_for_key(stream_key)
+
+    case :ets.lookup(table, stream_key) do
+      [] ->
+        # Stream doesn't exist, return 0-0
+        {0, 0}
+
+      [{^stream_key, {:stream, entries}}] when is_list(entries) ->
+        case entries do
+          [] ->
+            # Empty stream, return 0-0
+            {0, 0}
+
+          [{first_entry_id, _} | _] ->
+            # entries are stored with newest first, so first entry is the maximum
+            [timestamp_str, sequence_str] = String.split(first_entry_id, "-")
+            {String.to_integer(timestamp_str), String.to_integer(sequence_str)}
+        end
+
+      [{^stream_key, {_type, _}}] ->
+        # Wrong type, return 0-0
+        {0, 0}
+    end
+  end
+
   # Helper function to parse range IDs
   defp parse_range_id("-", :start), do: {0, 0}
   defp parse_range_id("+", :end), do: {:infinity, :infinity}
+
+  defp parse_range_id("$", stream_key) when is_binary(stream_key) do
+    get_max_id_from_stream(stream_key)
+  end
 
   defp parse_range_id(id, _) when is_binary(id) do
     case String.split(id, "-") do
@@ -429,14 +461,19 @@ defmodule Store do
           [{^stream_key, {:stream, entries}}] ->
             IO.inspect(entries, label: "Entries in stream")
 
+            # Parse start_id - pass stream_key for $ handling
+            {start_ts, start_seq} =
+              if start_id == "$" do
+                parse_range_id(start_id, stream_key)
+              else
+                parse_range_id(start_id, :start)
+              end
+
             filtered_entries =
               entries
               |> Enum.filter(fn {entry_id, _field_value_pairs} ->
                 # Parse entry_id into timestamp and sequence
                 {entry_ts, entry_seq} = parse_entry_id(entry_id)
-
-                # Parse start_id into timestamp and sequence
-                {start_ts, start_seq} = parse_range_id(start_id, :start)
 
                 # Check if entry is greater than start (exclusive)
                 in_range?({entry_ts, entry_seq}, {start_ts, start_seq})

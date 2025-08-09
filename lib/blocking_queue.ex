@@ -236,8 +236,23 @@ defmodule BlockingQueue do
       index ->
         stream_position = Enum.at(ids, index)
 
+        # For $ in blocking XREAD, we need to check if there are any entries
+        # newer than what existed when the command was issued
+        actual_position =
+          if stream_position == "$" do
+            # Get the current max ID from the stream at the time of notification
+            # This ensures we only get entries added after the XREAD was issued
+            case Store.get_max_id_from_stream(stream_key) do
+              # Stream was empty when XREAD was issued
+              {0, 0} -> "0-0"
+              {ts, seq} -> "#{ts}-#{seq}"
+            end
+          else
+            stream_position
+          end
+
         # Check only this stream for new entries using Store.xread with single stream
-        case Store.xread([stream_key], [stream_position]) do
+        case Store.xread([stream_key], [actual_position]) do
           {:ok, []} ->
             # No new entries, keep waiting
             {:noreply,
