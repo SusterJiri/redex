@@ -2,6 +2,17 @@ defmodule Commands.Xread do
   @behaviour RedisCommand
 
   @impl RedisCommand
+  def execute([_blocking, timeout, streams_keyword | keys_ids]) do
+    case parse_streams([streams_keyword | keys_ids]) do
+      {:error, reason} ->
+        {:error, reason}
+
+      {stream_keys, ids} ->
+        {:block, {stream_keys, ids, timeout}}
+    end
+  end
+
+  @impl RedisCommand
   def execute([streams_keyword | keys_ids]) do
     case parse_streams([streams_keyword | keys_ids]) do
       {:error, reason} ->

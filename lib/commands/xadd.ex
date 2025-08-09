@@ -1,29 +1,12 @@
 defmodule Commands.Xadd do
   @behaviour RedisCommand
 
-  # @impl RedisCommand
-  # def execute([stream, field_value_args]) when length(field_value_args) >= 2 do
-  #   # Parse field-value pairs from remaining arguments
-  #   case parse_field_value_pairs(field_value_args) do
-  #     {:ok, field_value_pairs} ->
-  #       case Store.xadd(stream, entry_id, field_value_pairs) do
-  #         {:ok, response} ->
-  #           {:ok, "$#{byte_size(response)}\r\n#{response}\r\n"}
-
-  #         {:error, reason} ->
-  #           {:error, reason}
-  #       end
-
-  #     {:error, reason} ->
-  #       {:error, reason}
-  #   end
-  # end
-
   @impl RedisCommand
   def execute([stream, entry_id | field_value_args]) when length(field_value_args) >= 2 do
     with {timestamp, sequence} <- parse_timestamp_sequence(entry_id),
          {:ok, field_value_pairs} <- parse_field_value_pairs(field_value_args),
          {:ok, response} <- Store.xadd(stream, {timestamp, sequence}, field_value_pairs) do
+      BlockingQueue.notify_client(stream)
       {:ok, "$#{byte_size(response)}\r\n#{response}\r\n"}
     else
       {:error, reason} -> {:error, reason}
@@ -60,6 +43,7 @@ defmodule Commands.Xadd do
         cond do
           entry_id == "*" ->
             {DateTime.utc_now() |> DateTime.to_unix(:millisecond), :generate}
+
           true ->
             {:error, "Invalid entry ID format"}
         end

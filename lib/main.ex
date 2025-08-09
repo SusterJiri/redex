@@ -85,6 +85,11 @@ defmodule Server do
                 # Pass socket here
                 wait_for_unblock(socket)
 
+              {:block, {stream_keys, ids, timeout}} ->
+                BlockingQueue.add_blocked_client(stream_keys, ids, self(), socket, timeout)
+                # Pass socket here
+                wait_for_unblock(socket)
+
               {:error, reason} ->
                 error_response = "-ERR #{reason}\r\n"
                 write_line(error_response, socket)
