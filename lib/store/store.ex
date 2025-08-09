@@ -265,6 +265,7 @@ defmodule Store do
           {:ok, new_timestamp, new_sequence} ->
             # Add new entry to the head of the list (most recent first)
             entry_id = "#{new_timestamp}-#{new_sequence}"
+
             updated_entries = [
               {entry_id, {new_timestamp, new_sequence}, field_value_pairs} | existing_entries
             ]
@@ -329,26 +330,79 @@ defmodule Store do
     end
   end
 
-  def xrange(stream_key, _start_id \\ "-", _end_id \\ "+") do
+  def xrange(stream_key, start_id \\ "-", end_id \\ "+") do
     table = get_table_for_key(stream_key)
 
     case :ets.lookup(table, stream_key) do
       [] ->
         {:ok, []}
 
-      [{^stream_key, {:stream, stream_map}}] when is_map(stream_map) ->
-        # For now, return all entries (later we'll implement proper range filtering)
-        entries =
-          Enum.map(stream_map, fn {id, field_value_pairs} ->
-            {id, field_value_pairs}
-          end)
-          |> Enum.sort_by(fn {id, _} -> id end)
+      [{^stream_key, {:stream, stream_entries}}] when is_list(stream_entries) ->
+        # Parse start and end IDs
+        {start_ts, start_seq} = parse_range_id(start_id, :start)
+        {end_ts, end_seq} = parse_range_id(end_id, :end)
 
-        {:ok, entries}
+        # Filter entries within the range
+        filtered_entries =
+          stream_entries
+          |> Enum.filter(fn {_entry_id, {timestamp, sequence}, _field_value_pairs} ->
+            in_range?({timestamp, sequence}, {start_ts, start_seq}, {end_ts, end_seq})
+          end)
+          # Reverse to get chronological order (oldest first)
+          |> Enum.reverse()
+          |> Enum.map(fn {entry_id, _parsed_id, field_value_pairs} ->
+            {entry_id, field_value_pairs}
+          end)
+          IO.inspect(filtered_entries, label: "Filtered entries in xrange")
+
+        {:ok, filtered_entries}
 
       [{^stream_key, {type, _}}] ->
         {:error,
          "WRONGTYPE Operation against a key holding the wrong kind of value, expected: stream, got: #{type}"}
     end
+  end
+
+  # Helper function to parse range IDs
+  defp parse_range_id("-", :start), do: {0, 0}
+  defp parse_range_id("+", :end), do: {:infinity, :infinity}
+
+  defp parse_range_id(id, _) when is_binary(id) do
+    case String.split(id, "-") do
+      [timestamp_str] ->
+        # Only timestamp provided, default sequence to 0 for start, max for end
+        timestamp = String.to_integer(timestamp_str)
+        {timestamp, 0}
+
+      [timestamp_str, sequence_str] ->
+        timestamp = String.to_integer(timestamp_str)
+        sequence = String.to_integer(sequence_str)
+        {timestamp, sequence}
+    end
+  end
+
+  # Helper function to check if an entry is within range
+  defp in_range?({ts, seq}, {start_ts, start_seq}, {end_ts, end_seq}) do
+    # Check if entry timestamp/sequence is >= start
+    start_ok =
+      cond do
+        # "-" means from beginning
+        start_ts == 0 and start_seq == 0 -> true
+        ts > start_ts -> true
+        ts == start_ts and seq >= start_seq -> true
+        true -> false
+      end
+
+    # Check if entry timestamp/sequence is <= end
+    end_ok =
+      cond do
+        # "+" means to end
+        end_ts == :infinity -> true
+        ts < end_ts -> true
+        ts == end_ts and seq <= end_seq -> true
+        true -> false
+      end
+
+    start_ok and end_ok
   end
 end

@@ -177,6 +177,9 @@ defmodule Server do
       "XADD" ->
         RedisCommand.xadd_command(args)
 
+      "XRANGE" ->
+        RedisCommand.xrange_command(args)
+
       _ ->
         {:error, "Unknown command: #{command}"}
     end
