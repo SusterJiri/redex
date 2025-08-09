@@ -174,7 +174,7 @@ defmodule BlockingQueue do
     {:reply, has_clients, state}
   end
 
-  def has_blocked_clients?(key) do
+  def has_blocked_clients(key) do
     GenServer.call(__MODULE__, {:has_blocked_clients, key})
   end
 

@@ -50,6 +50,9 @@ defmodule Commands.Xadd do
 
   defp parse_timestamp_sequence(entry_id) do
     case String.split(entry_id, "-") do
+      [timestamp, sequence] when is_binary(timestamp) and sequence == "*" ->
+        {String.to_integer(timestamp), :generate}
+
       [timestamp, sequence] when is_binary(timestamp) and is_binary(sequence) ->
         {String.to_integer(timestamp), String.to_integer(sequence)}
 

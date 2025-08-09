@@ -244,22 +244,29 @@ defmodule Store do
 
   def xadd(stream_key, {timestamp, sequence}, field_value_pairs) do
     table = get_table_for_key(stream_key)
-    entry_id = "#{timestamp}-#{sequence}"
 
     case :ets.lookup(table, stream_key) do
       [] ->
         # Create new stream with first entry
         # Store as a list with newest entries at the head for easy access
-        stream_entries = [{entry_id, {timestamp, sequence}, field_value_pairs}]
-        :ets.insert(table, {stream_key, {:stream, stream_entries}})
-        {:ok, entry_id}
+        case validate_entry_id({timestamp, sequence}, []) do
+          {:ok, new_timestamp, new_sequence} ->
+            entry_id = "#{new_timestamp}-#{new_sequence}"
+            stream_entries = [{entry_id, {new_timestamp, new_sequence}, field_value_pairs}]
+            :ets.insert(table, {stream_key, {:stream, stream_entries}})
+            {:ok, entry_id}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
 
       [{^stream_key, {:stream, existing_entries}}] when is_list(existing_entries) ->
         case validate_entry_id({timestamp, sequence}, existing_entries) do
-          :ok ->
+          {:ok, new_timestamp, new_sequence} ->
             # Add new entry to the head of the list (most recent first)
+            entry_id = "#{new_timestamp}-#{new_sequence}"
             updated_entries = [
-              {entry_id, {timestamp, sequence}, field_value_pairs} | existing_entries
+              {entry_id, {new_timestamp, new_sequence}, field_value_pairs} | existing_entries
             ]
 
             :ets.insert(table, {stream_key, {:stream, updated_entries}})
@@ -281,11 +288,17 @@ defmodule Store do
   # Validate that the new entry ID is greater than the last entry
   defp validate_entry_id({new_timestamp, new_sequence}, []) do
     cond do
+      new_timestamp == 0 and new_sequence == :generate ->
+        {:ok, new_timestamp, 1}
+
+      new_sequence == :generate ->
+        {:ok, new_timestamp, 0}
+
       new_timestamp == 0 and new_sequence == 0 ->
         {:error, "The ID specified in XADD must be greater than 0-0"}
 
       true ->
-        :ok
+        {:ok, new_timestamp, new_sequence}
     end
   end
 
@@ -293,14 +306,20 @@ defmodule Store do
          {_last_entry_id, {last_timestamp, last_sequence}, _} | _
        ]) do
     cond do
+      new_timestamp > last_timestamp and new_sequence == :generate ->
+        {:ok, new_timestamp, 0}
+
+      new_sequence == :generate ->
+        {:ok, new_timestamp, last_sequence + 1}
+
       new_timestamp == 0 and new_sequence == 0 ->
         {:error, "The ID specified in XADD must be greater than 0-0"}
 
       new_timestamp > last_timestamp ->
-        :ok
+        {:ok, new_timestamp, new_sequence}
 
       new_timestamp == last_timestamp and new_sequence > last_sequence ->
-        :ok
+        {:ok, new_timestamp, new_sequence}
 
       new_timestamp == last_timestamp and new_sequence == last_sequence ->
         {:error, "The ID specified in XADD is equal or smaller than the target stream top item"}

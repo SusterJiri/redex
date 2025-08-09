@@ -16,7 +16,7 @@ defmodule Commands.Blpop do
 
     # Check if there are already blocked clients for this key
     # If so, we should block immediately to maintain FIFO order
-    case BlockingQueue.has_blocked_clients?(key) do
+    case BlockingQueue.has_blocked_clients(key) do
       true ->
         IO.puts("BLPOP: Other clients already waiting, blocking immediately for key '#{key}'")
         {:block, {key, timeout}}
