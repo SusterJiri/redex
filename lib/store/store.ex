@@ -529,7 +529,7 @@ defmodule Store do
             {:ok, new_value}
 
           _ ->
-            {:error, "Value is not an integer"}
+            {:error, "value is not an integer or out of range"}
         end
 
       {:error, _reason} ->
