@@ -188,6 +188,9 @@ defmodule Server do
       "XREAD" ->
         RedisCommand.xread_command(args)
 
+      "INCR" ->
+        RedisCommand.incr_command(args)
+
       _ ->
         {:error, "Unknown command: #{command}"}
     end

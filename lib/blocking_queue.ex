@@ -23,11 +23,11 @@ defmodule BlockingQueue do
         found_client =
           Enum.find(clients, fn
             # BLPOP client format
-            {pid, _socket, _timestamp, _timer_ref} when pid == client_pid ->
+            {pid, _socket,  _timer_ref} when pid == client_pid ->
               true
 
             # XREAD client format
-            {pid, _socket, _timestamp, _timer_ref, :xread, _stream_info} when pid == client_pid ->
+            {pid, _socket,  _timer_ref, :xread, _stream_info} when pid == client_pid ->
               true
 
             # No match
@@ -48,11 +48,11 @@ defmodule BlockingQueue do
             remaining_clients =
               Enum.reject(clients, fn
                 # BLPOP client format
-                {pid, _socket, _timestamp, _timer_ref} when pid == client_pid ->
+                {pid, _socket,  _timer_ref} when pid == client_pid ->
                   true
 
                 # XREAD client format
-                {pid, _socket, _timestamp, _timer_ref, :xread, _stream_info}
+                {pid, _socket,  _timer_ref, :xread, _stream_info}
                 when pid == client_pid ->
                   true
 
@@ -177,11 +177,11 @@ defmodule BlockingQueue do
         # Check the client type (4-tuple for BLPOP, 6-tuple for XREAD)
         case first_client do
           # BLPOP client (original format)
-          {_client_pid, socket, _timestamp, timer_ref} ->
+          {_client_pid, socket,  timer_ref} ->
             handle_blpop_client(key, first_client, remaining_clients, state)
 
           # XREAD client (new format with operation type and stream positions)
-          {client_pid, socket, _timestamp, timer_ref, :xread, stream_positions} ->
+          {client_pid, socket,  timer_ref, :xread, stream_positions} ->
             handle_xread_client(key, first_client, remaining_clients, state)
 
           # Handle any other format gracefully
@@ -197,7 +197,7 @@ defmodule BlockingQueue do
       state
       |> Enum.map(fn {key, clients} ->
         filtered_clients =
-          Enum.reject(clients, fn {pid, _socket, _timestamp, timer_ref} ->
+          Enum.reject(clients, fn {pid, _socket,  timer_ref} ->
             if pid == client_pid do
               # Cancel timer before removing
               if timer_ref, do: Process.cancel_timer(timer_ref)
@@ -217,7 +217,7 @@ defmodule BlockingQueue do
 
   defp handle_xread_client(
          stream_key,
-         {client_pid, socket, _timestamp, timer_ref, :xread, {stream_keys, ids}},
+         {client_pid, socket,  timer_ref, :xread, {stream_keys, ids}},
          remaining_clients,
          state
        ) do
@@ -229,7 +229,7 @@ defmodule BlockingQueue do
         # This client wasn't watching this stream, keep waiting
         {:noreply,
          Map.put(state, stream_key, [
-           {client_pid, socket, _timestamp, timer_ref, :xread, {stream_keys, ids}}
+           {client_pid, socket,  timer_ref, :xread, {stream_keys, ids}}
            | remaining_clients
          ])}
 
@@ -257,7 +257,7 @@ defmodule BlockingQueue do
             # No new entries, keep waiting
             {:noreply,
              Map.put(state, stream_key, [
-               {client_pid, socket, _timestamp, timer_ref, :xread, {stream_keys, ids}}
+               {client_pid, socket,  timer_ref, :xread, {stream_keys, ids}}
                | remaining_clients
              ])}
 
@@ -278,7 +278,7 @@ defmodule BlockingQueue do
             # Error checking stream, keep waiting
             {:noreply,
              Map.put(state, stream_key, [
-               {client_pid, socket, _timestamp, timer_ref, :xread, {stream_keys, ids}}
+               {client_pid, socket,  timer_ref, :xread, {stream_keys, ids}}
                | remaining_clients
              ])}
         end
@@ -287,7 +287,7 @@ defmodule BlockingQueue do
 
   defp handle_blpop_client(
          key,
-         {_client_pid, socket, _timestamp, timer_ref},
+         {_client_pid, socket,  timer_ref},
          remaining_clients,
          state
        ) do
@@ -381,12 +381,12 @@ defmodule BlockingQueue do
       filtered_clients =
         Enum.reject(clients, fn
           # Handle BLPOP clients (4-tuple)
-          {pid, _socket, _timestamp, timer_ref} when pid == client_pid ->
+          {pid, _socket,  timer_ref} when pid == client_pid ->
             if timer_ref, do: Process.cancel_timer(timer_ref)
             true
 
           # Handle XREAD clients (6-tuple)
-          {pid, _socket, _timestamp, timer_ref, :xread, _stream_info} when pid == client_pid ->
+          {pid, _socket,  timer_ref, :xread, _stream_info} when pid == client_pid ->
             if timer_ref, do: Process.cancel_timer(timer_ref)
             true
 

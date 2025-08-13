@@ -513,4 +513,32 @@ defmodule Store do
 
     start_ok
   end
+
+  def incr(key) do
+    case get(key) do
+      {:ok, value} when is_integer(value) ->
+        new_value = value + 1
+        set(key, new_value)
+        {:ok, new_value}
+
+      {:ok, value} when is_binary(value) ->
+        case Integer.parse(value) do
+          {int_value, ""} ->
+            new_value = int_value + 1
+            set(key, new_value)
+            {:ok, new_value}
+
+          _ ->
+            {:error, "Value is not an integer"}
+        end
+
+      {:error, _reason} ->
+        # If the key does not exist or has no value, initialize it to 1
+        set(key, 1)
+        {:ok, 1}
+
+      {:error, _reason} ->
+        {:error, "Key not found"}
+    end
+  end
 end
